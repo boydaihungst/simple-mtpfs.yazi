@@ -78,7 +78,7 @@ preloaders = [
   # Do not preload MTP mount_point, cause they are very slow.
   # Environment variable won't work here.
   # Using absolute path instead.
-  { name = "/home/boydaihungst/Media/*", run = "noop" },
+  { name = "/home/boydaihungst/Media/**/*", run = "noop" },
   #... the rest of preloaders
 ]
 previewers = [
@@ -87,7 +87,7 @@ previewers = [
   # Do not preview MTP mount_point (uncomment to except text file)
   #  { mime = "{text/*,application/x-subrip}", run = "code" },
   # Using absolute path.
-  { name = "/home/boydaihungst/Media/*", run = "noop" },
+  { name = "/home/boydaihungst/Media/**/*", run = "noop" },
   #... the rest of previewers
 ]
 ```
