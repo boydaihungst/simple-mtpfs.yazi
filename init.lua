@@ -57,9 +57,9 @@ local Command = _G.Command
 ---@field stdin fun(self: Command, cfg: Command.PIPED | Command.NULL | Command.INHERIT| STD_STREAM): self
 ---@field stdout fun(self: Command, cfg: Command.PIPED | Command.NULL | Command.INHERIT| STD_STREAM): self
 ---@field stderr fun(self: Command, cfg: Command.PIPED | Command.NULL | Command.INHERIT| STD_STREAM): self
----@field spawn fun(self: Command): Child|nil, integer
----@field output fun(self: Command): Output|nil, integer
----@field status fun(self: Command): Status|nil, integer
+---@field spawn fun(self: Command): Child|nil, unknown
+---@field output fun(self: Command): Output|nil, unknown
+---@field status fun(self: Command): Status|nil, unknown
 
 ---@alias STD_STREAM unknown
 
@@ -67,14 +67,14 @@ local Command = _G.Command
 ---@field read fun(self: Child, len: string): string, 1|0
 ---@field read_line fun(self: Child): string, 1|0
 ---@field read_line_with fun(self: Child, opts: {timeout: integer}): string, 1|2|3
----@field wait fun(self: Child): Status|nil, integer
----@field wait_with_output fun(self: Child): Output|nil, integer
----@field start_kill fun(self: Child): boolean, integer
----@field take_stdin fun(self: Child): STD_STREAM|nil, integer
----@field take_stdout fun(self: Child): STD_STREAM|nil, integer
----@field take_stderr fun(self: Child): STD_STREAM|nil, integer
----@field write_all fun(self: Child, src: string): STD_STREAM|nil, integer
----@field flush fun(self: Child): STD_STREAM|nil, integer
+---@field wait fun(self: Child): Status|nil, unknown
+---@field wait_with_output fun(self: Child): Output|nil, unknown
+---@field start_kill fun(self: Child): boolean, unknown
+---@field take_stdin fun(self: Child): STD_STREAM|nil, unknown
+---@field take_stdout fun(self: Child): STD_STREAM|nil, unknown
+---@field take_stderr fun(self: Child): STD_STREAM|nil, unknown
+---@field write_all fun(self: Child, src: string): STD_STREAM|nil, unknown
+---@field flush fun(self: Child): STD_STREAM|nil, unknown
 
 ---@class (exact) Output The Output of the command if successful; otherwise, nil
 ---@field status Status The Status of the child process
@@ -127,13 +127,13 @@ local function run_command(cmd, args, _stdin)
 		Command(cmd):args(args):cwd(cwd):stdin(stdin):stdout(Command.PIPED):stderr(Command.PIPED):spawn()
 
 	if not child then
-		error("Spawn " .. cmd .. " failed with error code %s", cmd_err)
+		error("Failed to start `%s` with error: `%s`", cmd, cmd_err)
 		return cmd_err, nil
 	end
 
 	local output, out_err = child:wait_with_output()
 	if not output then
-		error("Cannot read " .. cmd .. " output, error code %s", out_err)
+		error("Cannot read `%s` output, error: `%s`", cmd, out_err)
 		return out_err, nil
 	else
 		return nil, output
@@ -146,8 +146,8 @@ local is_dir = function(dir_path)
 end
 
 local is_mounted = function(dir_path)
-	local cmd_err_code, res = run_command(shell, { "-c", "mountpoint -q " .. path_quote(dir_path) })
-	return not cmd_err_code and res and res.status.code == 0
+	local _, res = run_command("mountpoint", { dir_path })
+	return res and res.status and res.status.success
 end
 
 ---Get the mtp mount point
@@ -256,7 +256,7 @@ local function mount_mtp(opts)
 		:output()
 
 	local mount_success = res ~= nil and res.status.success
-	-- mount success
+
 	if mount_success then
 		info(NOTIFY_MSG.MOUNT_SUCCESS, device.name, mtp_mount_point)
 		return true
@@ -284,7 +284,7 @@ end
 local function list_mtp_device()
 	---@type Device[]
 	local devices = {}
-	local _, res = run_command(shell, { "-c", "simple-mtpfs -l" })
+	local _, res = run_command("simple-mtpfs", { "-l" })
 	if res then
 		if res.status.success then
 			for line in string.gmatch(res.stdout, "[^\r\n]+") do
@@ -320,20 +320,17 @@ local function list_mtp_device_by_status(status)
 end
 
 --- Unmount a mtp device
----@param opts {device: Device, is_from_remote: boolean}
+---@param opts {device: Device}
 ---@return boolean
 local function unmount_mtp(opts)
 	local mtp_mnt_point = get_mount_path(opts.device)
-	local is_from_remote = opts.is_from_remote
 
-	local cmd_err_code, res = run_command(shell, { "-c", "fusermount -u " .. path_quote(mtp_mnt_point) })
-	if cmd_err_code or (res and not res.status.success) then
-		if not is_from_remote then
-			error(NOTIFY_MSG.UNMOUNT_ERROR)
-			return false
-		end
+	local cmd_err, res = run_command("fusermount", { "-u", mtp_mnt_point })
+	if cmd_err or (res and not res.status.success) then
+		error(NOTIFY_MSG.UNMOUNT_ERROR)
+		return false
 	end
-	if not cmd_err_code and res and res.status.success then
+	if not cmd_err and res and res.status.success then
 		info(NOTIFY_MSG.UNMOUNT_SUCCESS, opts.device.name, mtp_mnt_point)
 		remove_device_mount_point(mtp_mnt_point)
 	end
