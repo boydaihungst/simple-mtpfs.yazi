@@ -379,8 +379,8 @@ local function setup(_, opts)
 end
 
 return {
-	entry = function(_, args)
-		local action = args[1]
+	entry = function(_, job)
+		local action = job.args[1]
 		if not action or not get_state("global", STATE_KEY.ROOT_MNT_POINT) then
 			return
 		end
