@@ -12,11 +12,11 @@ than using other method such as Android adb.
 ## Features
 
 - Mount and Unmount MTP device, tested with android 14
-
+- Auto select the first device if there is only one device listed.
 - Jump to device's mounted location.
-
 - After jumped to device's mounted location, jump back to the previous location with a single keybind.
   Make it easier to copy/paste files.
+- Auto jump after successfully mounted a device (use `--jump` in `--args`)
 
 ## Requirements
 
@@ -63,6 +63,7 @@ Add this to your `~/.config/yazi/keymap.toml`:
 prepend_keymap = [
     # simple-mtpfs plugin
     { on = [ "M", "m" ], run = "plugin simple-mtpfs --args=select-then-mount", desc = "Select device then mount" },
+    { on = [ "M", "m" ], run = "plugin simple-mtpfs --args='select-then-mount --jump'", desc = "Select device to mount and jump to its mount point" },
     { on = [ "M", "u" ], run = "plugin simple-mtpfs --args=select-then-unmount", desc = "Select device then unmount" },
     { on = [ "g", "m" ], run = "plugin simple-mtpfs --args=jump-to-device", desc = "Select device then jump to its mount point" },
     { on = [ "`", "`" ], run = "plugin simple-mtpfs --args=jump-back-prev-cwd", desc = "Jump back to the position before jumped to device" },
