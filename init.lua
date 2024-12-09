@@ -378,16 +378,33 @@ local function setup(_, opts)
 	set_state("global", STATE_KEY.MNT_OPTS, mount_opts)
 end
 
+function jump_to_device(selected_device)
+	if not selected_device then
+		return
+	end
+
+	local mtp_mnt_point = get_mount_path(selected_device)
+	local success = is_mounted(mtp_mnt_point)
+
+	if success then
+		set_state("global", STATE_KEY.PREV_CWD, current_dir())
+		ya.manager_emit("cd", { mtp_mnt_point })
+	else
+		error(NOTIFY_MSG.DEVICE_IS_DISCONNECTED)
+	end
+end
+
 return {
 	entry = function(_, job)
 		local action = job.args[1]
+		local jump = job.args.jump or false
 		if not action or not get_state("global", STATE_KEY.ROOT_MNT_POINT) then
 			return
 		end
 		-- Select a device then mount
 		if action == ACTION.SELECT_THEN_MOUNT then
 			local list_devices = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.NOT_MOUNTED)
-			local selected_device = select_device_which_key(list_devices)
+			local selected_device = #list_devices == 1 and list_devices[1] or select_device_which_key(list_devices)
 
 			if not selected_device then
 				return
@@ -402,26 +419,14 @@ return {
 			})
 			if not success then
 				remove_device_mount_point(mtp_mnt_point)
+			elseif jump then
+				jump_to_device(selected_device)
 			end
 		-- select a device then go to its mounted point
 		elseif action == ACTION.JUMP_TO_DEVICE then
 			local list_devices = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.MOUNTED)
-			local selected_device = select_device_which_key(list_devices)
-
-			if not selected_device then
-				return
-			end
-
-			local mtp_mnt_point = get_mount_path(selected_device)
-			local success = is_mounted(mtp_mnt_point)
-
-			if success then
-				set_state("global", STATE_KEY.PREV_CWD, current_dir())
-				ya.manager_emit("cd", { mtp_mnt_point })
-			else
-				error(NOTIFY_MSG.DEVICE_IS_DISCONNECTED)
-			end
-		-- jump back to prev cwd before jump to device
+			local selected_device = #list_devices == 1 and list_devices[1] or select_device_which_key(list_devices)
+			jump_to_device(selected_device)
 		elseif action == ACTION.JUMP_BACK_PREV_CWD then
 			local prev_cwd = get_state("global", STATE_KEY.PREV_CWD)
 			if not prev_cwd then
@@ -436,7 +441,7 @@ return {
 		-- select a device then unmount
 		elseif action == ACTION.SELECT_THEN_UNMOUNT then
 			local list_devices = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.MOUNTED)
-			local selected_device = select_device_which_key(list_devices)
+			local selected_device = #list_devices == 1 and list_devices[1] or select_device_which_key(list_devices)
 
 			if not selected_device then
 				return
