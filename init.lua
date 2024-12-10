@@ -30,12 +30,18 @@ local STATE_KEY = {
 	MNT_OPTS = "MNT_OPTS",
 }
 
+---@enum STATE_STORE_KEY
+local STATE_STORE_KEY = {
+	GLOBAL = "GLOBAL",
+}
+
 ---@enum ACTION
 local ACTION = {
 	SELECT_THEN_MOUNT = "select-then-mount",
 	JUMP_TO_DEVICE = "jump-to-device",
 	JUMP_BACK_PREV_CWD = "jump-back-prev-cwd",
 	SELECT_THEN_UNMOUNT = "select-then-unmount",
+	REMOUNT_KEEP_CWD_UNCHANGED = "remount-current-cwd-device",
 }
 
 ---@enum Command.PIPED
@@ -103,7 +109,11 @@ local set_state = ya.sync(function(state, archive, key, value)
 end)
 
 local get_state = ya.sync(function(state, archive, key)
-	return state[archive] and state[archive][key] or nil
+	if key then
+		return state[archive] and state[archive][key] or nil
+	else
+		return state[archive] or nil
+	end
 end)
 
 local function path_quote(path)
@@ -146,7 +156,7 @@ local is_dir = function(dir_path)
 end
 
 local is_mounted = function(dir_path)
-	local _, res = run_command("mountpoint", { dir_path })
+	local res, _ = Command("mountpoint"):args({ dir_path }):stdout(Command.PIPED):stderr(Command.PIPED):output()
 	return res and res.status and res.status.success
 end
 
@@ -217,7 +227,7 @@ end
 ---@param device Device device name path
 ---@return string
 local function get_mount_path(device)
-	local mtp_mount_point = get_state("global", STATE_KEY.ROOT_MNT_POINT)
+	local mtp_mount_point = get_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.ROOT_MNT_POINT)
 	if not mtp_mount_point then
 		return ""
 	end
@@ -247,9 +257,12 @@ local function mount_mtp(opts)
 	local res, _ = Command(shell)
 		:args({
 			"-c",
-			"simple-mtpfs --device " .. device.number .. " " .. path_quote(mtp_mount_point) .. " -o " .. table.unpack(
-				mount_opts
-			),
+			"simple-mtpfs --device "
+				.. tonumber(device.number)
+				.. " "
+				.. path_quote(mtp_mount_point)
+				.. " -o "
+				.. table.unpack(mount_opts),
 		})
 		:stderr(Command.PIPED)
 		:stdout(Command.PIPED)
@@ -293,8 +306,6 @@ local function list_mtp_device()
 					table.insert(devices, { number = tonumber(device_number), name = device_name })
 				end
 			end
-		else
-			error(NOTIFY_MSG.LIST_DEVICES_EMPTY)
 		end
 	end
 	return devices
@@ -361,7 +372,34 @@ local function select_device_which_key(devices)
 	if selected_idx and selected_idx > 0 then
 		return devices[selected_idx]
 	end
-	return
+end
+
+local function count_yazi_instances()
+	local instances = 0
+	local cmd_err, res = run_command("pgrep", { "yazi" })
+	if res and res.status.success then
+		for yazi_instances_pid in string.gmatch(res.stdout, "[^\r\n]+") do
+			instances = instances + 1
+		end
+	end
+	return instances
+end
+
+local function get_device_from_path(path)
+	---@type Device
+	local device_within_path
+	local mtp_mount_point = get_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.ROOT_MNT_POINT)
+	if not mtp_mount_point then
+		return device_within_path
+	end
+	local number, name = string.match(path, mtp_mount_point .. "/(%d+)_(%w+)")
+	if number and name then
+		device_within_path = {
+			number = number,
+			name = name,
+		}
+	end
+	return device_within_path
 end
 
 ---setup function in yazi/init.lua
@@ -374,81 +412,161 @@ local function setup(_, opts)
 	if not root_mnt_point then
 		return
 	end
-	set_state("global", STATE_KEY.ROOT_MNT_POINT, root_mnt_point)
-	set_state("global", STATE_KEY.MNT_OPTS, mount_opts)
+	set_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.ROOT_MNT_POINT, root_mnt_point)
+	set_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.MNT_OPTS, mount_opts)
 end
 
-function jump_to_device(selected_device)
+local function jump_to_device_dir_action(selected_device)
+	if not selected_device then
+		local list_devices = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.MOUNTED)
+		selected_device = #list_devices == 1 and list_devices[1] or select_device_which_key(list_devices)
+	end
 	if not selected_device then
 		return
 	end
-
 	local mtp_mnt_point = get_mount_path(selected_device)
 	local success = is_mounted(mtp_mnt_point)
 
 	if success then
-		set_state("global", STATE_KEY.PREV_CWD, current_dir())
+		set_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.PREV_CWD, current_dir())
 		ya.manager_emit("cd", { mtp_mnt_point })
 	else
 		error(NOTIFY_MSG.DEVICE_IS_DISCONNECTED)
 	end
 end
 
+---
+---@param opts {fallback_dir: string?}?
+local function jump_to_prev_cwd_action(opts)
+	local prev_cwd = get_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.PREV_CWD)
+	if not prev_cwd then
+		return
+	end
+	if is_dir(prev_cwd) then
+		set_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.PREV_CWD, current_dir())
+		ya.manager_emit("cd", { prev_cwd })
+	elseif opts and opts.fallback_dir and is_dir(opts.fallback_dir) then
+		set_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.PREV_CWD, current_dir())
+		ya.manager_emit("cd", { opts.fallback_dir })
+	else
+		error(NOTIFY_MSG.CANT_ACCESS_PREV_CWD)
+	end
+end
+
+--- mount action
+---@param opts { jump: boolean?, selected_device: Device? }?
+local function mount_action(opts)
+	local selected_device
+	if not opts or not opts.selected_device then
+		local list_devices = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.NOT_MOUNTED)
+		selected_device = #list_devices == 1 and list_devices[1] or select_device_which_key(list_devices)
+		if #list_devices == 0 then
+			local list_devices_mounted = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.MOUNTED)
+			selected_device = #list_devices_mounted == 1 and list_devices_mounted[1] or nil
+			if not selected_device then
+				error(NOTIFY_MSG.LIST_DEVICES_EMPTY)
+			end
+		end
+	end
+	if opts and opts.selected_device then
+		selected_device = opts.selected_device
+	end
+	if not selected_device then
+		return
+	end
+	local mtp_mnt_point = get_mount_path(selected_device)
+	local mount_opts = get_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.MNT_OPTS) or {}
+
+	local success = mount_mtp({
+		device = selected_device,
+		mtp_mount_point = mtp_mnt_point,
+		mount_opts = mount_opts,
+	})
+	if not success then
+		remove_device_mount_point(mtp_mnt_point)
+	elseif opts and opts.jump then
+		jump_to_device_dir_action(selected_device)
+	end
+	return success
+end
+
+--- unmount action
+---@param opts { selected_device: Device? }?
+local function unmount_action(opts)
+	local selected_device
+	if not opts or not opts.selected_device then
+		local list_devices = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.MOUNTED)
+		selected_device = #list_devices == 1 and list_devices[1] or select_device_which_key(list_devices)
+		if not selected_device and #list_devices == 0 then
+			error(NOTIFY_MSG.LIST_DEVICES_EMPTY)
+		end
+	end
+	if opts and opts.selected_device then
+		selected_device = opts.selected_device
+	end
+	if not selected_device then
+		return
+	end
+
+	unmount_mtp({
+		device = selected_device,
+	})
+end
+
+local save_tab_hovered = ya.sync(function()
+	local hovered_item_per_tab = {}
+	for _, tab in ipairs(cx.tabs) do
+		table.insert(hovered_item_per_tab, { id = tab.id, cwd = tostring(tab.current.cwd) })
+	end
+	return hovered_item_per_tab
+end)
+
+local function remount_keep_cwd_unchanged_action()
+	local current_tab_device = get_device_from_path(current_dir())
+	if not current_tab_device then
+		return
+	end
+	local tabs = save_tab_hovered()
+	local saved_tabs = {}
+	for _, tab in ipairs(tabs) do
+		local tab_device = get_device_from_path(tab.cwd)
+		if
+			tab_device
+			and tab_device.number == current_tab_device.number
+			and tab_device.name == current_tab_device.name
+		then
+			table.insert(saved_tabs, tab)
+			ya.manager_emit("cd", { home, tab = tonumber(tab.id) })
+		end
+	end
+	mount_action({ jump = false, selected_device = current_tab_device })
+	for _, tab in ipairs(saved_tabs) do
+		ya.manager_emit("cd", { tab.cwd, tab = tonumber(tab.id) })
+	end
+	-- ya.manager_emit("refresh", {})
+end
+
 return {
 	entry = function(_, job)
 		local action = job.args[1]
 		local jump = job.args.jump or false
-		if not action or not get_state("global", STATE_KEY.ROOT_MNT_POINT) then
+		if not action or not get_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.ROOT_MNT_POINT) then
 			return
 		end
 		-- Select a device then mount
 		if action == ACTION.SELECT_THEN_MOUNT then
-			local list_devices = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.NOT_MOUNTED)
-			local selected_device = #list_devices == 1 and list_devices[1] or select_device_which_key(list_devices)
-
-			if not selected_device then
-				return
-			end
-			local mtp_mnt_point = get_mount_path(selected_device)
-			local mount_opts = get_state("global", STATE_KEY.MNT_OPTS) or {}
-
-			local success = mount_mtp({
-				device = selected_device,
-				mtp_mount_point = mtp_mnt_point,
-				mount_opts = mount_opts,
-			})
-			if not success then
-				remove_device_mount_point(mtp_mnt_point)
-			elseif jump then
-				jump_to_device(selected_device)
-			end
-		-- select a device then go to its mounted point
-		elseif action == ACTION.JUMP_TO_DEVICE then
-			local list_devices = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.MOUNTED)
-			local selected_device = #list_devices == 1 and list_devices[1] or select_device_which_key(list_devices)
-			jump_to_device(selected_device)
-		elseif action == ACTION.JUMP_BACK_PREV_CWD then
-			local prev_cwd = get_state("global", STATE_KEY.PREV_CWD)
-			if not prev_cwd then
-				return
-			end
-			if is_dir(prev_cwd) then
-				set_state("global", STATE_KEY.PREV_CWD, current_dir())
-				ya.manager_emit("cd", { prev_cwd })
-			else
-				error(NOTIFY_MSG.CANT_ACCESS_PREV_CWD)
-			end
+			mount_action({ jump = jump })
 		-- select a device then unmount
 		elseif action == ACTION.SELECT_THEN_UNMOUNT then
-			local list_devices = list_mtp_device_by_status(DEVICE_CONNECT_STATUS.MOUNTED)
-			local selected_device = #list_devices == 1 and list_devices[1] or select_device_which_key(list_devices)
-
-			if not selected_device then
-				return
-			end
-			unmount_mtp({
-				device = selected_device,
-			})
+			unmount_action()
+		-- remount device within current cwd
+		elseif action == ACTION.REMOUNT_KEEP_CWD_UNCHANGED then
+			remount_keep_cwd_unchanged_action()
+		-- select a device then go to its mounted point
+		elseif action == ACTION.JUMP_TO_DEVICE then
+			jump_to_device_dir_action()
+		elseif action == ACTION.JUMP_BACK_PREV_CWD then
+			jump_to_prev_cwd_action()
 		end
 	end,
 	setup = setup,

@@ -1,12 +1,24 @@
 # simple-mtpfs.yazi
 
+<!--toc:start-->
+
+- [simple-mtpfs.yazi](#simple-mtpfsyazi)
+  - [Features](#features)
+  - [Requirements](#requirements)
+  - [Installation](#installation)
+    - [Options](#options)
+  - [Usage](#usage)
+  <!--toc:end-->
+
 [simple-mtpfs.yazi](https://github.com/boydaihungst/simple-mtpfs.yazi)
 uses [simple-mtpfs](https://github.com/phatina/simple-mtpfs/wiki) to
 transparently mount and unmount MTP devices in read/write mode, allowing you to
 navigate inside, view, and edit individual or groups of files.
 
-[simple-mtpfs.yazi](https://github.com/boydaihungst/simple-mtpfs.yazi) use MTP and FUSE
-to mount MTP devices, like Android, Camera, etc. But because using MTP so it's way slow
+[simple-mtpfs.yazi](https://github.com/boydaihungst/simple-mtpfs.yazi) use MTP
+and FUSE
+to mount MTP devices, like Android, Camera, etc. But because using MTP so it's
+way slow
 than using other method such as Android adb.
 
 ## Features
@@ -14,7 +26,8 @@ than using other method such as Android adb.
 - Mount and Unmount MTP device, tested with android 14
 - Auto select the first device if there is only one device listed.
 - Jump to device's mounted location.
-- After jumped to device's mounted location, jump back to the previous location with a single keybind.
+- After jumped to device's mounted location, jump back to the previous location
+  with a single keybind.
   Make it easier to copy/paste files.
 - Auto jump after successfully mounted a device (use `--jump` in `--args`)
 
@@ -43,9 +56,11 @@ require("simple-mtpfs"):setup({})
 
 The plugin supports the following options, which can be assigned during setup:
 
-1. `mount_point`: The folder path will be created to mount. The default value is `$HOME/Media`. DO NOT include forward slash (`/`) at the end,
+1. `mount_point`: The folder path will be created to mount. The default value is
+   `$HOME/Media`. DO NOT include forward slash (`/`) at the end,
    environment variable won't work (instead use `os.getenv("VARIABLE")`).
-2. `mount_opts`: a table of Fuse options after `-o`, get list of them by using `simple-mtpfs --help`. The default value is `{"enable-move"}`.
+2. `mount_opts`: a table of Fuse options after `-o`, get list of them by using
+   `simple-mtpfs --help`. The default value is `{"enable-move"}`.
 
 ```lua
 require("simple-mtpfs"):setup({
@@ -63,14 +78,18 @@ Add this to your `~/.config/yazi/keymap.toml`:
 prepend_keymap = [
     # simple-mtpfs plugin
     { on = [ "M", "m" ], run = "plugin simple-mtpfs --args=select-then-mount", desc = "Select device then mount" },
+    # or this if you want to jump to mountpoint after mounted
     { on = [ "M", "m" ], run = "plugin simple-mtpfs --args='select-then-mount --jump'", desc = "Select device to mount and jump to its mount point" },
+    # This will remount device under cwd (e.g. cwd = $HOME/Media/1_ZTEV5/Downloads/, device mountpoint = $HOME/Media/1_ZTEV5/)
+    { on = [ "M", "r" ], run = "plugin simple-mtpfs --args=remount-current-cwd-device", desc = "Remount device under cwd" },
     { on = [ "M", "u" ], run = "plugin simple-mtpfs --args=select-then-unmount", desc = "Select device then unmount" },
     { on = [ "g", "m" ], run = "plugin simple-mtpfs --args=jump-to-device", desc = "Select device then jump to its mount point" },
     { on = [ "`", "`" ], run = "plugin simple-mtpfs --args=jump-back-prev-cwd", desc = "Jump back to the position before jumped to device" },
 ]
 ```
 
-It's highly recommended to add these lines to your `~/.config/yazi/yazi.toml`, because MTP is so slow that makes yazi freeze when it previews a large file,
+It's highly recommended to add these lines to your `~/.config/yazi/yazi.toml`,
+because MTP is so slow that makes yazi freeze when it previews a large file,
 in that case unplug your MTP device and re-mount.
 
 ```toml
