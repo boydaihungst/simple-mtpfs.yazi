@@ -77,20 +77,20 @@ Add this to your `~/.config/yazi/keymap.toml`:
 [manager]
 prepend_keymap = [
     # simple-mtpfs plugin
-    { on = [ "M", "m" ], run = "plugin simple-mtpfs --args=select-then-mount", desc = "Select device then mount" },
+    { on = [ "M", "m" ], run = "plugin simple-mtpfs -- select-then-mount", desc = "Select device then mount" },
     # or this if you want to jump to mountpoint after mounted
-    { on = [ "M", "m" ], run = "plugin simple-mtpfs --args='select-then-mount --jump'", desc = "Select device to mount and jump to its mount point" },
+    { on = [ "M", "m" ], run = "plugin simple-mtpfs -- 'select-then-mount --jump'", desc = "Select device to mount and jump to its mount point" },
     # This will remount device under cwd (e.g. cwd = $HOME/Media/1_ZTEV5/Downloads/, device mountpoint = $HOME/Media/1_ZTEV5/)
-    { on = [ "M", "r" ], run = "plugin simple-mtpfs --args=remount-current-cwd-device", desc = "Remount device under cwd" },
-    { on = [ "M", "u" ], run = "plugin simple-mtpfs --args=select-then-unmount", desc = "Select device then unmount" },
-    { on = [ "g", "m" ], run = "plugin simple-mtpfs --args=jump-to-device", desc = "Select device then jump to its mount point" },
-    { on = [ "`", "`" ], run = "plugin simple-mtpfs --args=jump-back-prev-cwd", desc = "Jump back to the position before jumped to device" },
+    { on = [ "M", "r" ], run = "plugin simple-mtpfs -- remount-current-cwd-device", desc = "Remount device under cwd" },
+    { on = [ "M", "u" ], run = "plugin simple-mtpfs -- select-then-unmount", desc = "Select device then unmount" },
+    { on = [ "g", "m" ], run = "plugin simple-mtpfs -- jump-to-device", desc = "Select device then jump to its mount point" },
+    { on = [ "`", "`" ], run = "plugin simple-mtpfs -- jump-back-prev-cwd", desc = "Jump back to the position before jumped to device" },
 ]
 ```
 
 It's highly recommended to add these lines to your `~/.config/yazi/yazi.toml`,
 because MTP is so slow that makes yazi freeze when it previews a large file,
-in that case unplug your MTP device and re-mount.
+in that case unplug your MTP device and re-mount. replace `boydaihungst` with your username
 
 ```toml
 [plugin]

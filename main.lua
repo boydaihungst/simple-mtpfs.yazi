@@ -1,3 +1,5 @@
+--- @since 25.2.7
+
 local shell = os.getenv("SHELL") or ""
 local home = os.getenv("HOME") or ""
 local PLUGIN_NAME = "simple-mtpfs"
