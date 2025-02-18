@@ -29,7 +29,7 @@ than using other method such as Android adb.
 - After jumped to device's mounted location, jump back to the previous location
   with a single keybind.
   Make it easier to copy/paste files.
-- Auto jump after successfully mounted a device (use `--jump` in `--args`)
+- Auto jump after successfully mounted a device (use `--jump`)
 
 ## Requirements
 
