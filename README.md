@@ -33,7 +33,7 @@ than using other method such as Android adb.
 
 ## Requirements
 
-1. A relatively modern (>= 0.4) version of
+1. A relatively modern (>= 25.4.8) version of
    [yazi](https://github.com/sxyazi/yazi).
 
 2. This plugin only supports Linux, and requires having

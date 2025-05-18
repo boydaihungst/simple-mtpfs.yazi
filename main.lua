@@ -1,6 +1,4 @@
---- @since 25.2.7
---- NOTE: REMOVE :parent() :name() :is_hovered() :ext() tab.id after upgrade to v25.4.4
---- https://github.com/sxyazi/yazi/pull/2572
+--- @since 25.4.8
 
 local shell = os.getenv("SHELL") or ""
 local home = os.getenv("HOME") or ""
@@ -433,7 +431,7 @@ local function jump_to_device_dir_action(selected_device)
 
 	if success then
 		set_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.PREV_CWD, current_dir())
-		ya.manager_emit("cd", { mtp_mnt_point })
+		ya.mgr_emit("cd", { mtp_mnt_point })
 	else
 		error(NOTIFY_MSG.DEVICE_IS_DISCONNECTED)
 	end
@@ -448,10 +446,10 @@ local function jump_to_prev_cwd_action(opts)
 	end
 	if is_dir(prev_cwd) then
 		set_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.PREV_CWD, current_dir())
-		ya.manager_emit("cd", { prev_cwd })
+		ya.mgr_emit("cd", { prev_cwd })
 	elseif opts and opts.fallback_dir and is_dir(opts.fallback_dir) then
 		set_state(STATE_STORE_KEY.GLOBAL, STATE_KEY.PREV_CWD, current_dir())
-		ya.manager_emit("cd", { opts.fallback_dir })
+		ya.mgr_emit("cd", { opts.fallback_dir })
 	else
 		error(NOTIFY_MSG.CANT_ACCESS_PREV_CWD)
 	end
@@ -543,7 +541,7 @@ local function remount_keep_cwd_unchanged_action()
 			and tab_device.name == current_tab_device.name
 		then
 			table.insert(saved_tabs, tab)
-			ya.manager_emit("cd", {
+			ya.mgr_emit("cd", {
 				home,
 				tab = tonumber((type(tab.id) == "number" or type(tab.id) == "string") and tab.id or tab.id.value),
 			})
@@ -551,12 +549,12 @@ local function remount_keep_cwd_unchanged_action()
 	end
 	mount_action({ jump = false, selected_device = current_tab_device })
 	for _, tab in ipairs(saved_tabs) do
-		ya.manager_emit("cd", {
+		ya.mgr_emit("cd", {
 			tab.cwd,
 			tab = tonumber((type(tab.id) == "number" or type(tab.id) == "string") and tab.id or tab.id.value),
 		})
 	end
-	-- ya.manager_emit("refresh", {})
+	-- ya.mgr_emit("refresh", {})
 end
 
 return {
