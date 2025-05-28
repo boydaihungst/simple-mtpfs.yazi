@@ -21,6 +21,8 @@ to mount MTP devices, like Android, Camera, etc. But because using MTP so it's
 way slow
 than using other method such as Android adb.
 
+## DEPRECATED in favor of [gvfs.yazi](https://github.com/boydaihungst/gvfs.yazi)
+
 ## Features
 
 - Mount and Unmount MTP device, tested with android 14
